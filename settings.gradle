@@ -1,0 +1,3 @@
+include ':ReadMind'
+include ':app'
+rootProject.name = "OnDemandFeatures"
