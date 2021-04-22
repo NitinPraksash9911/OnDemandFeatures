@@ -1,23 +1,27 @@
 package com.example.ondemandfeatures
 
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
 import com.example.ondemandfeatures.databinding.ActivityMainBinding
+import com.example.ondemandfeatures.dfm.DfmCallingActions
+import com.example.ondemandfeatures.dfm.DynamicFeatureCalling
 import com.google.android.play.core.splitinstall.*
 import com.google.android.play.core.splitinstall.model.SplitInstallSessionStatus
 
-private const val TAG = "DynamicFeatures"
-private const val READ_MIND_CLASSNAME = "com.example.readmind.ReadMind"
+ const val TAG = "DynamicFeatures"
+private const val DML_PKG = "com.example.readmind"
+private const val READ_MIND_CLASSNAME = "$DML_PKG.ReadMind"
+private const val DynamicFeatureCallingImpl_CLASSNAME = "$DML_PKG.DynamicFeatureCallingImpl"
 private const val CONFIRMATION_REQUEST_CODE = 1
 
 
 class MainActivity : AppCompatActivity() {
-
+    private var DML_SESSION_ID: Int = 0
+    lateinit var dynamicFeatureCalling: DynamicFeatureCalling
     lateinit var binding: ActivityMainBinding
     private lateinit var manager: SplitInstallManager
     private val moduleReadMind by lazy { getString(R.string.title_readmind) }
@@ -26,29 +30,34 @@ class MainActivity : AppCompatActivity() {
     private val listener = SplitInstallStateUpdatedListener { state ->
         val multiInstall = state.moduleNames().size > 1
         val names = state.moduleNames().joinToString(" - ")
-        when (state.status()) {
-            SplitInstallSessionStatus.DOWNLOADING -> {
-                //  In order to see this, the application has to be uploaded to the Play Store.
-                displayLoadingState(state, "Downloading $names")
-            }
-            SplitInstallSessionStatus.REQUIRES_USER_CONFIRMATION -> {
-                /*
+        if (state.sessionId() == DML_SESSION_ID) {
+            when (state.status()) {
+                SplitInstallSessionStatus.DOWNLOADING -> {
+                    //  In order to see this, the application has to be uploaded to the Play Store.
+                    displayLoadingState(state, "Downloading $names")
+                }
+                SplitInstallSessionStatus.REQUIRES_USER_CONFIRMATION -> {
+                    /*
                   This may occur when attempting to download a sufficiently large module.
 
                   In order to see this, the application has to be uploaded to the Play Store.
                   Then features can be requested until the confirmation path is triggered.
                  */
-                manager.startConfirmationDialogForResult(state, this, CONFIRMATION_REQUEST_CODE)
-            }
-            SplitInstallSessionStatus.INSTALLED -> {
+                    manager.startConfirmationDialogForResult(state, this, CONFIRMATION_REQUEST_CODE)
+                }
+                SplitInstallSessionStatus.INSTALLED -> {
 //                onSuccessfulLoad(names, launch = !multiInstall)
-                toastAndLog("$names is installed")
+                    toastAndLog("$names is installed")
 
-            }
+                }
 
-            SplitInstallSessionStatus.INSTALLING -> displayLoadingState(state, "Installing $names")
-            SplitInstallSessionStatus.FAILED -> {
-                toastAndLog("Error: ${state.errorCode()} for module ${state.moduleNames()}")
+                SplitInstallSessionStatus.INSTALLING -> displayLoadingState(
+                    state,
+                    "Installing $names"
+                )
+                SplitInstallSessionStatus.FAILED -> {
+                    toastAndLog("Error: ${state.errorCode()} for module ${state.moduleNames()}")
+                }
             }
         }
     }
@@ -56,8 +65,12 @@ class MainActivity : AppCompatActivity() {
     /** Display a loading state to the user. */
     private fun displayLoadingState(state: SplitInstallSessionState, message: String) {
 
-        binding.progressBar.max = state.totalBytesToDownload().toInt()
-        binding.progressBar.progress = state.bytesDownloaded().toInt()
+        val max = state.totalBytesToDownload()
+        val progress = state.bytesDownloaded()
+        binding.progressBar.max = max.toInt()
+        binding.progressBar.progress = progress.toInt()
+        Log.d(TAG, "displayLoadingState: progress: $progress, max: $max")
+        binding.progressTv.text = (progress.div(max).times(100)).toString()
 
     }
 
@@ -97,37 +110,56 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
         manager = SplitInstallManagerFactory.create(this)
-        binding.readBtn.setOnClickListener {
-//            onSuccessfulLoad(moduleReadMind, true)
+        binding.installBtn.setOnClickListener {
             loadAndLaunchModule(moduleReadMind)
 
+        }
+        binding.uninstallBtn.setOnClickListener {
+            unInstallModule(moduleReadMind)
+        }
+
+        binding.callMethod.setOnClickListener {
+            DfmCallingActions.callMethodDFM()
         }
 
 
     }
 
+
+    private fun unInstallModule(moduleName: String) {
+        if (manager.installedModules.contains(moduleName)) {
+            manager.deferredUninstall(listOf(moduleName))
+            toastAndLog("it will remove within 24hr by playStore API")
+
+        }else{
+            toastAndLog("not present")
+        }
+
+    }
+
     /**
      * Load a feature by module name.
-     * @param name The name of the feature module to load.
+     * @param moduleName The name of the feature module to load.
      */
-    private fun loadAndLaunchModule(name: String) {
-//        updateProgressMessage(getString(R.string.loading_module, name))
+    private fun loadAndLaunchModule(moduleName: String) {
         // Skip loading if the module already is installed. Perform success action directly.
-        if (manager.installedModules.contains(name)) {
-//            updateProgressMessage(getString(R.string.already_installed))
-            onSuccessfulLoad(name, launch = true)
+        if (manager.installedModules.contains(moduleName)) {
+            onSuccessfulLoad(moduleName, launch = true)
             return
         }
 
         // Create request to install a feature module by name.
         val request = SplitInstallRequest.newBuilder()
-            .addModule(name)
+            .addModule(moduleName)
             .build()
 
         toastAndLog("installing read mind feature")
-        manager.startInstall(request)
+        manager.startInstall(request).addOnSuccessListener { id ->
+            DML_SESSION_ID = id
+        }.addOnFailureListener {
 
-//        updateProgressMessage(getString(R.string.starting_install_for, name))
+        }
+
     }
 
     fun toastAndLog(text: String) {
