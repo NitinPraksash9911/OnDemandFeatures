@@ -10,12 +10,17 @@ class App : Application() {
     override fun attachBaseContext(base: Context?) {
         super.attachBaseContext(base)
         SplitCompat.install(this)
-        instance = this
     }
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+
+    }
+
     companion object{
         private var instance: Context? = null
-
-        fun getInstance()= instance
+        fun getInstance()= instance!!.applicationContext!!
     }
 
 

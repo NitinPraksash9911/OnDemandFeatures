@@ -1,5 +1,6 @@
 package com.example.ondemandfeatures
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -12,7 +13,7 @@ import com.example.ondemandfeatures.dfm.DynamicFeatureCalling
 import com.google.android.play.core.splitinstall.*
 import com.google.android.play.core.splitinstall.model.SplitInstallSessionStatus
 
- const val TAG = "DynamicFeatures"
+const val TAG = "DynamicFeatures"
 private const val DML_PKG = "com.example.readmind"
 private const val READ_MIND_CLASSNAME = "$DML_PKG.ReadMind"
 private const val DynamicFeatureCallingImpl_CLASSNAME = "$DML_PKG.DynamicFeatureCallingImpl"
@@ -21,7 +22,6 @@ private const val CONFIRMATION_REQUEST_CODE = 1
 
 class MainActivity : AppCompatActivity() {
     private var DML_SESSION_ID: Int = 0
-    lateinit var dynamicFeatureCalling: DynamicFeatureCalling
     lateinit var binding: ActivityMainBinding
     private lateinit var manager: SplitInstallManager
     private val moduleReadMind by lazy { getString(R.string.title_readmind) }
@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
                     manager.startConfirmationDialogForResult(state, this, CONFIRMATION_REQUEST_CODE)
                 }
                 SplitInstallSessionStatus.INSTALLED -> {
-//                onSuccessfulLoad(names, launch = !multiInstall)
+                onSuccessfulLoad(names, launch = !multiInstall)
                     toastAndLog("$names is installed")
 
                 }
@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
     private fun onSuccessfulLoad(moduleName: String, launch: Boolean) {
         if (launch) {
             when (moduleName) {
-                moduleReadMind -> launchActivity(READ_MIND_CLASSNAME)
+                moduleReadMind -> DfmCallingActions.launchDfm(this)
 
             }
         }
@@ -131,7 +131,7 @@ class MainActivity : AppCompatActivity() {
             manager.deferredUninstall(listOf(moduleName))
             toastAndLog("it will remove within 24hr by playStore API")
 
-        }else{
+        } else {
             toastAndLog("not present")
         }
 
@@ -165,5 +165,19 @@ class MainActivity : AppCompatActivity() {
     fun toastAndLog(text: String) {
         Toast.makeText(this, text, Toast.LENGTH_LONG).show()
         Log.d(TAG, text)
+    }
+
+    /** This required for user confirmation if DFM size is greater than 10mb */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == CONFIRMATION_REQUEST_CODE) {
+            // Handle the user's decision. For example, if the user selects "Cancel",
+            // you may want to disable certain functionality that depends on the module.
+            if (resultCode == Activity.RESULT_CANCELED) {
+                finish()
+
+            }
+        } else {
+            super.onActivityResult(requestCode, resultCode, data)
+        }
     }
 }
